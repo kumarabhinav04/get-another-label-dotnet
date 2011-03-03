@@ -1,0 +1,5 @@
+SAME	1	odd
+SAME	2	even
+SAME	3	odd
+SAME	4	even
+DIFF	5	even->odd
