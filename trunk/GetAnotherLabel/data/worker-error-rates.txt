@@ -1,0 +1,45 @@
+Worker: w1
+Error Rate: 100%
+Quality_Expected: 0%
+Quality_Optimized: 0%
+Number of Annotations: 5
+Confusion Matrix:
+P[even->even]=100%	P[even->odd]=0%	
+P[odd->even]=100%	P[odd->odd]=0%	
+
+Worker: w2
+Error Rate: 33.33%
+Quality_Expected: 44%
+Quality_Optimized: 50%
+Number of Annotations: 5
+Confusion Matrix:
+P[even->even]=100%	P[even->odd]=0%	
+P[odd->even]=33.333%	P[odd->odd]=66.667%	
+
+Worker: w3
+Error Rate: 0%
+Quality_Expected: 100%
+Quality_Optimized: 100%
+Number of Annotations: 5
+Confusion Matrix:
+P[even->even]=100%	P[even->odd]=0%	
+P[odd->even]=0%	P[odd->odd]=100%	
+
+Worker: w4
+Error Rate: 0%
+Quality_Expected: 100%
+Quality_Optimized: 100%
+Number of Annotations: 5
+Confusion Matrix:
+P[even->even]=100%	P[even->odd]=0%	
+P[odd->even]=0%	P[odd->odd]=100%	
+
+Worker: w5
+Error Rate: 100%
+Quality_Expected: 100%
+Quality_Optimized: 100%
+Number of Annotations: 5
+Confusion Matrix:
+P[even->even]=0%	P[even->odd]=100%	
+P[odd->even]=100%	P[odd->odd]=0%	
+

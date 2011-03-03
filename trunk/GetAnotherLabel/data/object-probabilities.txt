@@ -1,0 +1,5 @@
+1	Pr[even]=0	Pr[odd]=1	
+2	Pr[even]=1	Pr[odd]=0	
+3	Pr[even]=0	Pr[odd]=1	
+4	Pr[even]=1	Pr[odd]=0	
+5	Pr[even]=0	Pr[odd]=1	
