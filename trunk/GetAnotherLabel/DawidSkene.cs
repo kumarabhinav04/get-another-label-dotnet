@@ -51,7 +51,7 @@ namespace GetAnotherLabel
         /// Error rate (confusion matrix) for each annotator.
         /// pi[k][j][l] is the probability that annotator k, classifies an item from category j to category l
         /// </summary>
-        double[,,] pi;
+        double[, ,] pi;
         /// <summary>
         /// Cost matrix for various errors.
         /// cost[i][j] is the cost of classifying an item from the correct category i to the category j
@@ -66,156 +66,161 @@ namespace GetAnotherLabel
         /// T[oid][l] is the probability that the object oid belong to class l.
         /// </summary>
         double[,] T;
+        // Tdemon[oid][l] is the normalizing constant
+        double[,] Tdenom;
+        // Tcount[oid] is the number of labels assigned to object oid
+        double[] Tcount;
 
-        public DawidSkene(List<Labeling> labels, List<Labeling> correct_labels, List<Labeling> classification_cost) {
+        public DawidSkene(List<Labeling> labels, List<Labeling> correct_labels, List<Labeling> classification_cost)
+        {
 
-		// Assign IDs to the labelers, objects, and classes
-		this.annotators = new Dictionary<string,int>();
-		this.classes = new Dictionary<string,int>();
-		this.objects = new Dictionary<string,int>();
-		this.contributions = new Dictionary<string,int>();
-		
-		// Assign IDs to the labelers, objects, and classes
-		this.annotators_names = new Dictionary<int,string>();
-		this.classes_names = new Dictionary<int,string>();
-		this.objects_names = new Dictionary<int,string>();
+            // Assign IDs to the labelers, objects, and classes
+            this.annotators = new Dictionary<string, int>();
+            this.classes = new Dictionary<string, int>();
+            this.objects = new Dictionary<string, int>();
+            this.contributions = new Dictionary<string, int>();
 
-		int aid = 0; // Annotator IDs
-		int cid = 0; // Class IDs
-		int oid = 0; // Object IDs
-		foreach (Labeling l in labels) {
-			string annotatorid = l.AnnotatorId;
-			if (!annotators.ContainsKey(annotatorid)) {
-				//System.out.println("Annotator:" + annotatorid + "=" + aid);
-				annotators[annotatorid] = aid;
-				annotators_names[aid] = annotatorid;
-				contributions[annotatorid]= 0;
-				aid++;
-			}
+            // Assign IDs to the labelers, objects, and classes
+            this.annotators_names = new Dictionary<int, string>();
+            this.classes_names = new Dictionary<int, string>();
+            this.objects_names = new Dictionary<int, string>();
 
-			string objectid = l.ObjectId;
-			if (!objects.ContainsKey(objectid)) {
-				//System.out.println("Object:" + objectid + "=" + oid);
-				objects[objectid] =oid;
-				objects_names[oid]= objectid;
-				oid++;
-			}
+            int aid = 0; // Annotator IDs
+            int cid = 0; // Class IDs
+            int oid = 0; // Object IDs
+            foreach (Labeling l in labels) {
+                string annotatorid = l.AnnotatorId;
+                if (!annotators.ContainsKey(annotatorid)) {
+                    //System.out.println("Annotator:" + annotatorid + "=" + aid);
+                    annotators[annotatorid] = aid;
+                    annotators_names[aid] = annotatorid;
+                    contributions[annotatorid] = 0;
+                    aid++;
+                }
 
-			string labelid = l.Label;
-			if (!classes.ContainsKey(labelid)) {
-				//System.out.println("Label:" + labelid + "=" + cid);
-				classes[labelid]=cid;
-				classes_names[cid]=labelid;
-				cid++;
-			}
-		}
-		
-		if (correct_labels != null) {
-			foreach (Labeling l in correct_labels) {
-	
-				string objectid = l.ObjectId;
-				if (!objects.ContainsKey(objectid)) {
-					//System.out.println("Object:" + objectid + "=" + oid);
-					objects[objectid]=oid;
-					objects_names[oid]= objectid;
-					oid++;
-				}
-	
-				string labelid = l.Label;
-				if (!classes.ContainsKey(labelid)) {
-					//System.out.println("Label:" + labelid + "=" + cid);
-					classes[labelid]= cid;
-					classes_names[cid]=labelid;
-					cid++;
-				}
-			}
-		}
-		
+                string objectid = l.ObjectId;
+                if (!objects.ContainsKey(objectid)) {
+                    //System.out.println("Object:" + objectid + "=" + oid);
+                    objects[objectid] = oid;
+                    objects_names[oid] = objectid;
+                    oid++;
+                }
 
-		this.K = annotators.Keys.Count;
-		this.I = objects.Keys.Count;
-		this.J = classes.Keys.Count;
+                string labelid = l.Label;
+                if (!classes.ContainsKey(labelid)) {
+                    //System.out.println("Label:" + labelid + "=" + cid);
+                    classes[labelid] = cid;
+                    classes_names[cid] = labelid;
+                    cid++;
+                }
+            }
 
-		this.pi = new double[K,J,J];
-		InitializeErrorRates();
-		
-		this.prior = new double[J];
-		InitializePriors();
-		
-		// Initialize labels to -1 (i.e., not labeled by annotator)
-		this.label = new int[K,I];
-		for (int k = 0; k < K; k++) {
-			for (int i = 0; i < I; i++) {
-				label[k,i] = -1;
-			}
-		}
+            if (correct_labels != null) {
+                foreach (Labeling l in correct_labels) {
 
-		// Initialize correct labels to -1 (i.e., we do not know the correct answers)
-		this.correct = new int[I];
-			for (int i = 0; i < I; i++) {
-				this.correct[i] = -1;
-			}
-		
-		// Load the labelings into the label array
-		foreach (Labeling l in labels) {
-			int labelerid = annotators[l.AnnotatorId];
-			int objectid = objects[l.ObjectId];
-			int classid = classes[l.Label];
-			
-			int curr = contributions[l.AnnotatorId];
-            contributions[l.AnnotatorId] = curr + 1;
+                    string objectid = l.ObjectId;
+                    if (!objects.ContainsKey(objectid)) {
+                        //System.out.println("Object:" + objectid + "=" + oid);
+                        objects[objectid] = oid;
+                        objects_names[oid] = objectid;
+                        oid++;
+                    }
 
-			this.label[labelerid,objectid] = classid;
-		}
+                    string labelid = l.Label;
+                    if (!classes.ContainsKey(labelid)) {
+                        //System.out.println("Label:" + labelid + "=" + cid);
+                        classes[labelid] = cid;
+                        classes_names[cid] = labelid;
+                        cid++;
+                    }
+                }
+            }
 
-		// Load the correct labels the correct array
-		if (correct_labels != null) {
-			foreach (Labeling l in correct_labels) {
-				int objectid = objects[l.ObjectId];
-				int classid = classes[l.Label];
-	
-				this.correct[objectid] = classid;
-			}
-		}
 
-		
-		// Initialize the class probability assignments
-		this.T = new double[I,J];
-		InitializeObjectClassProbabilities();
-		
-		// Initialize the cost array 
-		this.cost = new double[J,J];
-		InitializeCosts();
-		if (classification_cost != null) {
-			// TODO: Using the Labeling class to load cost 
-			// is ugly. Just create a proper class, ensuring
-			// that all costs are loaded properly etc.
-			foreach (Labeling c in classification_cost) {
-				
-				// The first column is the "from/correct" class
-				int from = classes[c.AnnotatorId];
-				
-				// The second column is the "to/classified" class
-				int to = classes[c.ObjectId];
-				
-				// The second column is the cost of classifying
-				// an object from the "correct" to the "classified" class
-				double decision_cost = double.Parse(c.Label);
+            this.K = annotators.Keys.Count;
+            this.I = objects.Keys.Count;
+            this.J = classes.Keys.Count;
 
-				this.cost[from,to]= decision_cost;
-			}
-		}
-		
-	}
-        
+            this.pi = new double[K, J, J];
+            InitializeErrorRates();
+
+            this.prior = new double[J];
+            InitializePriors();
+
+            // Initialize labels to -1 (i.e., not labeled by annotator)
+            this.label = new int[K, I];
+            for (int k = 0; k < K; k++) {
+                for (int i = 0; i < I; i++) {
+                    label[k, i] = -1;
+                }
+            }
+
+            // Initialize correct labels to -1 (i.e., we do not know the correct answers)
+            this.correct = new int[I];
+            for (int i = 0; i < I; i++) {
+                this.correct[i] = -1;
+            }
+
+            // Load the labelings into the label array
+            foreach (Labeling l in labels) {
+                int labelerid = annotators[l.AnnotatorId];
+                int objectid = objects[l.ObjectId];
+                int classid = classes[l.Label];
+
+                int curr = contributions[l.AnnotatorId];
+                contributions[l.AnnotatorId] = curr + 1;
+
+                this.label[labelerid, objectid] = classid;
+            }
+
+            // Load the correct labels the correct array
+            if (correct_labels != null) {
+                foreach (Labeling l in correct_labels) {
+                    int objectid = objects[l.ObjectId];
+                    int classid = classes[l.Label];
+
+                    this.correct[objectid] = classid;
+                }
+            }
+
+
+            // Initialize the class probability assignments
+            this.T = new double[I, J];
+            InitializeObjectClassProbabilities();
+
+            // Initialize the cost array 
+            this.cost = new double[J, J];
+            InitializeCosts();
+            if (classification_cost != null) {
+                // TODO: Using the Labeling class to load cost 
+                // is ugly. Just create a proper class, ensuring
+                // that all costs are loaded properly etc.
+                foreach (Labeling c in classification_cost) {
+
+                    // The first column is the "from/correct" class
+                    int from = classes[c.AnnotatorId];
+
+                    // The second column is the "to/classified" class
+                    int to = classes[c.ObjectId];
+
+                    // The second column is the cost of classifying
+                    // an object from the "correct" to the "classified" class
+                    double decision_cost = double.Parse(c.Label);
+
+                    this.cost[from, to] = decision_cost;
+                }
+            }
+
+        }
+
         private void InitializeCosts()
         {
             for (int i = 0; i < J; i++) {
                 for (int j = 0; j < J; j++) {
                     if (i == j) {
-                        cost[i,j] = 0;
+                        cost[i, j] = 0;
                     } else {
-                        cost[i,j] = 1;
+                        cost[i, j] = 1;
                     }
 
                 }
@@ -291,9 +296,9 @@ namespace GetAnotherLabel
             annotators_cost_minimized = new Dictionary<int, double>();
 
             for (int k = 0; k < K; k++) {
-                annotators_cost_naive[k]= GetAnnotatorCostNaive(k);
-                annotators_cost_adjusted[k]= GetAnnotatorCostAdjusted(k);
-                annotators_cost_minimized[k]= GetAnnotatorCostMinimized(k);
+                annotators_cost_naive[k] = GetAnnotatorCostNaive(k);
+                annotators_cost_adjusted[k] = GetAnnotatorCostAdjusted(k);
+                annotators_cost_minimized[k] = GetAnnotatorCostMinimized(k);
             }
         }
         public void UpdateAnnotatorErrorRates()
@@ -310,10 +315,22 @@ namespace GetAnotherLabel
                 // the class probability for each object
                 for (int oid = 0; oid < I; oid++) {
                     int l = label[lid, oid];
+                    // If the worker has not annotated the object,
+                    // we do not use it in estimating the error rate
                     if (l == -1)
                         continue;
+
+                    // We now get the classification of the object
+                    // based on the votes of all the other workers
+                    double[] T_lid = GetObjectClassProbabilities(oid, lid);
+
+                    // If nobody else has labeled the object oid,
+                    // we have no information
+                    if (T_lid == null)
+                        continue;
+
                     for (int j = 0; j < J; j++) {
-                        double d = T[oid, j];
+                        double d = T_lid[j];
                         //System.out.printf("d %d %d: %s\n",oid,j,double.toString(d));
 
                         confusion_matrix[j, l] += d;
@@ -332,7 +349,7 @@ namespace GetAnotherLabel
                 // confusion matrix
                 for (int j = 0; j < J; j++) {
                     for (int l = 0; l < J; l++) {
-                        pi[lid, j, l] = (marginal[j] > 0) ? Math.Round(1.0 * confusion_matrix[j, l] / marginal[j], 5) : 0.0;
+                        pi[lid, j, l] = (marginal[j] > 0) ? Math.Round(1.0 * confusion_matrix[j, l] / marginal[j], 5) : -1.0;
 
                         // Version with Laplace smoothing
                         // pi[lid][j][l] =  Utils.round( (confusion_matrix[j][l]+1) / (marginal[j]+J), 5);
@@ -349,9 +366,9 @@ namespace GetAnotherLabel
                 // for this object. If yes, then give the appropriate
                 // value to the T[oid][j] cells, and continue 
                 if (correct[oid] != -1) {
-
+                    // So if we **have** gold data, we get in this.
                     // Note: In principle, the following for-loop
-                    // is unnecessary. The T values should have been
+                    // is unnecessary. The gold T values should have been
                     // correctly set during the initialization phase
                     // But we keep this here, just in case.
                     for (int j = 0; j < J; j++) {
@@ -405,10 +422,90 @@ namespace GetAnotherLabel
                         denom += pdenom;
                     }
                     T[oid, j] = (denom > 0) ? Math.Round(nom / denom, 5) : 0.0;
-
+                    //Tdenom[oid][j] = (denom > 0) ? Utils.round( nom / denom, 5) : 0.0;
                 }
             }
         }
+
+        public double[] GetObjectClassProbabilities(int oid, int lid)
+        {
+            // First check if we already have the correct label
+            // for this object. If yes, then give the appropriate
+            // value to the T[oid][j] cells, and continue 
+            if (correct[oid] != -1) {
+                // So if we **have** gold data, we get in this.
+                // Note: In principle, the following for-loop
+                // is unnecessary. The gold T values should have been
+                // correctly set during the initialization phase
+                // But we keep this here, just in case.
+                for (int j = 0; j < J; j++) {
+                    if (correct[oid] == j) {
+                        T[oid, j] = 1.0;
+                    } else {
+                        T[oid, j] = 0.0;
+                    }
+                }
+                double[] res = new double[J];
+                for (int i = 0; i < J; i++)
+                    res[i] = T[oid, i];
+                return res;
+            }
+
+            // If we do not have the correct label, then we proceed as 
+            // usual with the M-phase of the EM-algorithm of Dawid&Skene
+
+            // Estimate denominator for Eq 2.5 of Dawid&Skene
+            double denom = 0;
+            for (int q = 0; q < J; q++) {
+                double pdenom = prior[q];
+                for (int k = 0; k < K; k++) {
+                    int given_label = label[k, oid];
+                    if (given_label == -1)
+                        continue;
+                    if (k == lid)
+                        continue;
+
+                    double evidence_for_q = pi[k, q, given_label];
+
+                    // Use the evidence only if we have a real estimate for pi[k][j][l] (i.e., it is not -1)
+                    if (pi[k, q, given_label] > -0.1) {
+                        pdenom *= evidence_for_q;
+                    }
+                }
+                denom += pdenom;
+            }
+
+            // If the denominator is 0, we have no basis for creating probability distribution
+            if (denom == 0) return null;
+
+            // This is the object probabilities without the influence of the annotator
+            double[] Tnew = new double[J];
+
+            for (int j = 0; j < J; j++) {
+                // Estimate nominator for Eq 2.5 of Dawid&Skene
+                double nom = prior[j];
+                // Go through all annotators
+                for (int k = 0; k < K; k++) {
+                    // Find the label given by annotator K to the object oid
+                    int given_label = label[k, oid];
+                    if (given_label == -1)
+                        continue;
+                    if (k == lid)
+                        continue;
+                    // Having the annotator gave the given_label, and given how often
+                    // given_label is mixed with j
+                    double evidence_for_j = pi[k, j, given_label];
+
+                    // Use the evidence only if we have a real estimate for pi[k][j][l] (i.e., it is not -1)
+                    if (pi[k, j, given_label] > -0.1) {
+                        nom *= evidence_for_j;
+                    }
+                }
+                Tnew[j] = Math.Round(nom / denom, 5);
+            }
+            return Tnew;
+        }
+
         public void UpdatePriors()
         {
             for (int j = 0; j < J; j++) {
@@ -431,9 +528,9 @@ namespace GetAnotherLabel
             double s = 0;
             for (int i = 0; i < J; i++) {
                 for (int j = 0; j < J; j++) {
-                    if (pi[k,i,j] > 0) {
-                        c += pi[k,i,j] * cost[i,j] * prior[i];
-                        s += prior[i] * cost[i,j];
+                    if (pi[k, i, j] > 0) {
+                        c += pi[k, i, j] * cost[i, j] * prior[i];
+                        s += prior[i] * cost[i, j];
                     }
                 }
             }
@@ -462,8 +559,8 @@ namespace GetAnotherLabel
             // annotator classifies an object as l
             for (int l = 0; l < J; l++) {
                 for (int j = 0; j < J; j++) {
-                    if (pi[k,j,l] > -0.1) {
-                        annotator_prior[l] += prior[j] * pi[k,j,l];
+                    if (pi[k, j, l] > -0.1) {
+                        annotator_prior[l] += prior[j] * pi[k, j, l];
                     }
                 }
             }
@@ -475,8 +572,8 @@ namespace GetAnotherLabel
                 // Let's find the soft label that corresponds to assigned_label
                 double[] soft = new double[J];
                 for (int i = 0; i < J; i++) {
-                    if (pi[k,i,assigned_label] > -0.1 && annotator_prior[assigned_label] > 0) {
-                        soft[i] = pi[k,i,assigned_label] * prior[i] / annotator_prior[assigned_label];
+                    if (pi[k, i, assigned_label] > -0.1 && annotator_prior[assigned_label] > 0) {
+                        soft[i] = pi[k, i, assigned_label] * prior[i] / annotator_prior[assigned_label];
                     }
                 }
 
@@ -507,8 +604,8 @@ namespace GetAnotherLabel
             // annotator classifies an object as l
             for (int l = 0; l < J; l++) {
                 for (int j = 0; j < J; j++) {
-                    if (pi[k,j,l] > -0.1) {
-                        annotator_prior[l] += prior[j] * pi[k,j,l];
+                    if (pi[k, j, l] > -0.1) {
+                        annotator_prior[l] += prior[j] * pi[k, j, l];
                     }
                 }
             }
@@ -520,8 +617,8 @@ namespace GetAnotherLabel
                 // Let's find the soft label that corresponds to assigned_label
                 double[] soft = new double[J];
                 for (int i = 0; i < J; i++) {
-                    if (pi[k,i,assigned_label] > -0.1 && annotator_prior[assigned_label] > 0) {
-                        soft[i] = pi[k,i,assigned_label] * prior[i] / annotator_prior[assigned_label];
+                    if (pi[k, i, assigned_label] > -0.1 && annotator_prior[assigned_label] > 0) {
+                        soft[i] = pi[k, i, assigned_label] * prior[i] / annotator_prior[assigned_label];
                     }
                 }
 
@@ -541,7 +638,7 @@ namespace GetAnotherLabel
 
             for (int i = 0; i < J; i++) {
                 for (int j = 0; j < J; j++) {
-                    c += p[i] * p[j] * cost[i,j];
+                    c += p[i] * p[j] * cost[i, j];
                 }
             }
 
@@ -554,7 +651,6 @@ namespace GetAnotherLabel
         /// <returns>The expected cost of this soft label.</returns>
         private double GetMinSoftLabelCost(double[] p)
         {
-
             double min_cost = double.MaxValue;
             for (int i = 0; i < J; i++) {
                 // So, with probability p[i] it belongs to class i
@@ -562,16 +658,13 @@ namespace GetAnotherLabel
                 // What is the expected cost in this case?
                 double costfor_i = 0;
                 for (int j = 0; j < J; j++) {
-                    costfor_i += p[j] * cost[i,j];
-
+                    costfor_i += p[j] * cost[i, j];
                 }
 
                 if (costfor_i < min_cost) {
                     min_cost = costfor_i;
                 }
-
             }
-
             return min_cost;
         }
         /// <summary>
@@ -606,8 +699,6 @@ namespace GetAnotherLabel
                         majorityclass = j;
                     }
                 }
-
-
             }
             return majorityclass;
         }
@@ -664,35 +755,36 @@ namespace GetAnotherLabel
         /// </summary>
         /// <param name="workerid"></param>
         /// <returns></returns>
-        public string PrintWorkerScore(int workerid) {
-		StringBuilder sb = new StringBuilder();
-		
-		string annotator_name = annotators_names[workerid];
-		double cost_naive = annotators_cost_naive[workerid];
-		double cost_adj = annotators_cost_adjusted[workerid];
-		double cost_min = annotators_cost_minimized[workerid];
-		
-		int contribution = contributions[annotator_name];
+        public string PrintWorkerScore(int workerid)
+        {
+            StringBuilder sb = new StringBuilder();
 
-		sb.AppendLine("Worker: "+ annotator_name);
-		sb.AppendLine("Error Rate: "+ Math.Round(100*cost_naive, 2) + "%");
-		sb.AppendLine("Quality_Expected: " + Math.Round(100*(1-cost_adj)) + "%");
-		sb.AppendLine("Quality_Optimized: " + Math.Round(100*(1-cost_min)) + "%");
-		sb.AppendLine("Number of Annotations: "  + contribution);
-		sb.AppendLine("Confusion Matrix:");
-		for (int i = 0; i < J; i++) {
-			for (int j = 0; j < J; j++) {
-				string correct_name = classes_names[i];
-				string assigned_name = classes_names[j];
-				sb.Append("P[" + correct_name + "->" + assigned_name + "]=" + ( (pi[workerid,i,j]>-0.1)?
-                    Math.Round(100*pi[workerid,i,j], 3).ToString() :"----" )+ "%\t");
-			}
-			sb.AppendLine();
-		}
-		sb.AppendLine();
+            string annotator_name = annotators_names[workerid];
+            double cost_naive = annotators_cost_naive[workerid];
+            double cost_adj = annotators_cost_adjusted[workerid];
+            double cost_min = annotators_cost_minimized[workerid];
 
-		return sb.ToString();
-	}
+            int contribution = contributions[annotator_name];
+
+            sb.AppendLine("Worker: " + annotator_name);
+            sb.AppendLine("Error Rate: " + Math.Round(100 * cost_naive, 2) + "%");
+            sb.AppendLine("Quality_Expected: " + Math.Round(100 * (1 - cost_adj)) + "%");
+            sb.AppendLine("Quality_Optimized: " + Math.Round(100 * (1 - cost_min)) + "%");
+            sb.AppendLine("Number of Annotations: " + contribution);
+            sb.AppendLine("Confusion Matrix:");
+            for (int i = 0; i < J; i++) {
+                for (int j = 0; j < J; j++) {
+                    string correct_name = classes_names[i];
+                    string assigned_name = classes_names[j];
+                    sb.Append("P[" + correct_name + "->" + assigned_name + "]=" + ((pi[workerid, i, j] > -0.1) ?
+                        Math.Round(100 * pi[workerid, i, j], 3).ToString() : "----") + "%\t");
+                }
+                sb.AppendLine();
+            }
+            sb.AppendLine();
+
+            return sb.ToString();
+        }
         /// <summary>
         /// Prints the objects that have probability distributions with entropy higher than the given threshold.
         /// </summary>
@@ -703,14 +795,14 @@ namespace GetAnotherLabel
 
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < I; i++) {
-                double entropy = DawidSkene.Entropy(T,i);
+                double entropy = DawidSkene.Entropy(T, i);
                 if (entropy < entropy_threshold) continue;
 
                 string object_name = objects_names[i];
                 sb.Append(object_name + "\t");
                 for (int j = 0; j < J; j++) {
                     string class_name = classes_names[j];
-                    sb.Append("Pr[" + class_name + "]=" + T[i,j] + "\t");
+                    sb.Append("Pr[" + class_name + "]=" + T[i, j] + "\t");
                 }
                 sb.AppendLine();
             }
